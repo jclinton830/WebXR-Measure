@@ -2,10 +2,16 @@ ol {
   padding-left: 4em;
 }
 
-.label {
-  text-shadow: -1px 1px 1px rgb(0,0,0);
-  font-size: 20px;
+#live-label {
   position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 2.5em;
+  color: white;
+  text-shadow: -1px 1px 2px rgb(0,0,0);
+  text-align: center;
+  pointer-events: none;
 }
 
 #ARButton {

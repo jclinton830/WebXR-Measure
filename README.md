@@ -10,14 +10,10 @@ The WebXR Device API is not yet compatible with all browsers. Check https://cani
 
 Navigate to [Demo](https://wonderful-albattani-95489f.netlify.app/) with your mobile device.
 
-After you pressed the *START AR* Button
-1. Move your phone around, until you see a marker on your screen.
-2. Move marker to first measurement point.
-3. Tap on the screen to start measurement.
-4. Move marker to second measurement point.
-5. Tap on the screen to stop measurement.
-6. The distance will appear in the center of the line connecting both measurement points.
-7. Repeat steps 2 to 5.
+Follow these steps:
+1. Press *START AR*.
+2. Point your camera at a surface (wall, floor, table).
+3. The perpendicular distance from your camera to the surface is shown live.
 
 ## Build
 
@@ -38,5 +34,4 @@ or build with
 ```
 npm run build
 ```
-
 
