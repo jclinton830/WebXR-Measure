@@ -4,63 +4,34 @@ import { BufferGeometryUtils } from 'three/examples/jsm/utils/BufferGeometryUtil
 
 let container, labelContainer;
 let camera, scene, renderer, light;
-let controller;
+let liveLabel;
 
 let hitTestSource = null;
 let hitTestSourceRequested = false;
 
-let measurements = [];
-let labels = [];
-
 let reticle;
-let currentLine = null;
 
 let width, height;
 
-function toScreenPosition(point, camera)
-{
-  var vector = new THREE.Vector3();
-  
-  vector.copy(point);
-  vector.project(camera);
-  
-  vector.x = (vector.x + 1) * width /2;
-  vector.y = (-vector.y + 1) * height/2;
-  vector.z = 0;
-
-  return vector
-
-};
-
-function getCenterPoint(points) {
-  let line = new THREE.Line3(...points)
-  return line.getCenter();
+function getSurfaceNormal(matrix) {
+  return new THREE.Vector3(
+    matrix.elements[4],
+    matrix.elements[5],
+    matrix.elements[6]
+  ).normalize();
 }
 
-function matrixToVector(matrix) {
-  let vector = new THREE.Vector3();
-  vector.setFromMatrixPosition(matrix);
-  return vector;
+function getCameraPosition() {
+  const camMatrix = renderer.xr.getCamera(camera).matrixWorld;
+  return new THREE.Vector3().setFromMatrixPosition(camMatrix);
 }
 
-function initLine(point) {
-  let lineMaterial = new THREE.LineBasicMaterial({
-    color: 0xffffff,
-    linewidth: 5,
-    linecap: 'round'
-  });
-
-  let lineGeometry = new THREE.BufferGeometry().setFromPoints([point, point]);
-  return new THREE.Line(lineGeometry, lineMaterial);
-}
-
-function updateLine(matrix) {
-  let positions = currentLine.geometry.attributes.position.array;
-  positions[3] = matrix.elements[12]
-  positions[4] = matrix.elements[13]
-  positions[5] = matrix.elements[14]
-  currentLine.geometry.attributes.position.needsUpdate = true;
-  currentLine.geometry.computeBoundingSphere();
+function getPerpendicularDistance(hitMatrix) {
+  const hitPoint = new THREE.Vector3().setFromMatrixPosition(hitMatrix);
+  const normal = getSurfaceNormal(hitMatrix);
+  const camPos = getCameraPosition();
+  const camToHit = new THREE.Vector3().subVectors(hitPoint, camPos);
+  return Math.abs(camToHit.dot(normal));
 }
 
 function initReticle() {
@@ -102,11 +73,6 @@ function initScene() {
   scene = new THREE.Scene();
 }
 
-function getDistance(points) {
-  if (points.length == 2)
-    return points[0].distanceTo(points[1]);
-}
-
 function initXR() {
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -126,6 +92,10 @@ function initXR() {
 
   initLabelContainer()
   container.appendChild(labelContainer);
+  liveLabel = document.createElement('div');
+  liveLabel.setAttribute('id', 'live-label');
+  liveLabel.textContent = 'Searching for surface...';
+  labelContainer.appendChild(liveLabel);
 
   document.body.appendChild(ARButton.createButton(renderer, {
     optionalFeatures: ["dom-overlay"],
@@ -133,38 +103,11 @@ function initXR() {
     requiredFeatures: ['hit-test']
   }));
 
-  controller = renderer.xr.getController(0);
-  controller.addEventListener('select', onSelect);
-  scene.add(controller);
-
   initReticle();
   scene.add(reticle);
 
   window.addEventListener('resize', onWindowResize, false);
   animate()
-}
-
-function onSelect() {
-  if (reticle.visible) {
-    measurements.push(matrixToVector(reticle.matrix));
-    if (measurements.length == 2) {
-      let distance = Math.round(getDistance(measurements) * 100);
-
-      let text = document.createElement('div');
-      text.className = 'label';
-      text.style.color = 'rgb(255,255,255)';
-      text.textContent = distance + ' cm';
-      document.querySelector('#container').appendChild(text);
-
-      labels.push({div: text, point: getCenterPoint(measurements)});
-
-      measurements = [];
-      currentLine = null;
-    } else {
-      currentLine = initLine(measurements[0]);
-      scene.add(currentLine);
-    }
-  }
 }
 
 function onWindowResize() {
@@ -202,21 +145,16 @@ function render(timestamp, frame) {
         let hit = hitTestResults[0];
         reticle.visible = true;
         reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+        const distM = getPerpendicularDistance(reticle.matrix);
+        const distCm = Math.round(distM * 100);
+        liveLabel.textContent = distCm + ' cm';
       } else {
         reticle.visible = false;
+        liveLabel.textContent = 'Searching for surface...';
       }
-
-      if (currentLine) {
-        updateLine(reticle.matrix);
-      }
+    } else {
+      liveLabel.textContent = 'Searching for surface...';
     }
-
-    labels.map((label) => {
-      let pos = toScreenPosition(label.point, renderer.xr.getCamera(camera));
-      let x = pos.x;
-      let y = pos.y;
-      label.div.style.transform = "translate(-50%, -50%) translate(" + x + "px," + y + "px)";
-    })
 
   }
   renderer.render(scene, camera);
