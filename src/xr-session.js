@@ -98,9 +98,13 @@ function initXR() {
   labelContainer.appendChild(liveLabel);
 
   document.body.appendChild(ARButton.createButton(renderer, {
-    optionalFeatures: ["dom-overlay"],
-    domOverlay: {root: document.querySelector('#container')}, 
-    requiredFeatures: ['hit-test']
+    optionalFeatures: ["dom-overlay", "depth-sensing"],
+    domOverlay: {root: document.querySelector('#container')},
+    requiredFeatures: ['hit-test'],
+    depthSensing: {
+      usagePreference: ["cpu-optimized", "gpu-optimized"],
+      dataFormatPreference: ["luminance-alpha", "float32"]
+    }
   }));
 
   initReticle();
@@ -116,6 +120,23 @@ function onWindowResize() {
   camera.aspect = width/height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height);
+}
+
+function getDepthSensingDistance(frame) {
+  const viewerPose = frame.getViewerPose(renderer.xr.getReferenceSpace());
+  if (!viewerPose) return null;
+  for (const view of viewerPose.views) {
+    const depthInfo = frame.getDepthInformation(view);
+    if (depthInfo) {
+      // Transform centre of view (0.5, 0.5) into depth-buffer UV space
+      const m = depthInfo.normDepthBufferCoordinatesFromNormViewCoordinates;
+      const dx = m[0] * 0.5 + m[4] * 0.5 + m[12];
+      const dy = m[1] * 0.5 + m[5] * 0.5 + m[13];
+      const dist = depthInfo.getDepthInMeters(dx, dy);
+      if (dist > 0) return dist;
+    }
+  }
+  return null;
 }
 
 function animate() {
@@ -150,7 +171,12 @@ function render(timestamp, frame) {
         liveLabel.textContent = distCm + ' cm';
       } else {
         reticle.visible = false;
-        liveLabel.textContent = 'Searching for surface...';
+        const depthDist = getDepthSensingDistance(frame);
+        if (depthDist !== null) {
+          liveLabel.textContent = Math.round(depthDist * 100) + ' cm';
+        } else {
+          liveLabel.textContent = 'Searching for surface...';
+        }
       }
     } else {
       liveLabel.textContent = 'Searching for surface...';
