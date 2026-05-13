@@ -8,6 +8,7 @@ let liveLabel;
 
 let hitTestSource = null;
 let hitTestSourceRequested = false;
+let lastKnownDistCm = null;
 
 let reticle;
 
@@ -98,13 +99,9 @@ function initXR() {
   labelContainer.appendChild(liveLabel);
 
   document.body.appendChild(ARButton.createButton(renderer, {
-    optionalFeatures: ["dom-overlay", "depth-sensing"],
+    optionalFeatures: ["dom-overlay"],
     domOverlay: {root: document.querySelector('#container')},
-    requiredFeatures: ['hit-test'],
-    depthSensing: {
-      usagePreference: ["cpu-optimized", "gpu-optimized"],
-      dataFormatPreference: ["luminance-alpha", "float32"]
-    }
+    requiredFeatures: ['hit-test']
   }));
 
   initReticle();
@@ -120,25 +117,6 @@ function onWindowResize() {
   camera.aspect = width/height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height);
-}
-
-function getDepthSensingDistance(frame, viewerPose) {
-  if (!viewerPose || typeof frame.getDepthInformation !== 'function') return null;
-  try {
-    for (const view of viewerPose.views) {
-      const depthInfo = frame.getDepthInformation(view);
-      if (depthInfo) {
-        const m = depthInfo.normDepthBufferCoordinatesFromNormViewCoordinates;
-        const dx = m[0] * 0.5 + m[4] * 0.5 + m[12];
-        const dy = m[1] * 0.5 + m[5] * 0.5 + m[13];
-        const dist = depthInfo.getDepthInMeters(dx, dy);
-        if (dist > 0) return dist;
-      }
-    }
-  } catch (e) {
-    // depth sensing not available or not granted for this session
-  }
-  return null;
 }
 
 function animate() {
@@ -158,11 +136,10 @@ function render(timestamp, frame) {
       session.addEventListener('end', function () {
         hitTestSourceRequested = false;
         hitTestSource = null;
+        lastKnownDistCm = null;
       });
       hitTestSourceRequested = true;
     }
-
-    const viewerPose = frame.getViewerPose(referenceSpace);
 
     if (hitTestSource) {
       let hitTestResults = frame.getHitTestResults(hitTestSource);
@@ -171,13 +148,12 @@ function render(timestamp, frame) {
         reticle.visible = true;
         reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
         const distM = getPerpendicularDistance(reticle.matrix);
-        const distCm = Math.round(distM * 100);
-        liveLabel.textContent = distCm + ' cm';
+        lastKnownDistCm = Math.round(distM * 100);
+        liveLabel.textContent = lastKnownDistCm + ' cm';
       } else {
         reticle.visible = false;
-        const depthDist = getDepthSensingDistance(frame, viewerPose);
-        if (depthDist !== null) {
-          liveLabel.textContent = Math.round(depthDist * 100) + ' cm';
+        if (lastKnownDistCm !== null) {
+          liveLabel.textContent = lastKnownDistCm + ' cm ~';
         } else {
           liveLabel.textContent = 'Searching for surface...';
         }
